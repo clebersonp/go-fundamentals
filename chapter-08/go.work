@@ -1,0 +1,7 @@
+//Work with workingspace -> https://www.youtube.com/watch?v=TUvLnij8JRk&list=LL&index=3
+go 1.20
+
+use (
+	./magazine
+	./program
+)
