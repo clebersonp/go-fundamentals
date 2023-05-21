@@ -1,0 +1,7 @@
+// $ go work init ./calendar
+go 1.20
+
+use (
+	./calendar
+	./program
+)
