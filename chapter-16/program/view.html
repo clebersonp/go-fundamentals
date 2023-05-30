@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Guestbook</title>
+</head>
+<body>
+<h1>Guestbook</h1>
+
+<div>
+    <span>{{.SignatureCount}} total signatures - </span><a href="/guestbook/new">Add Your Signature</a>
+</div>
+
+<!-- If the slices of signatures are nil, it will be threat as ZERO -->
+<!-- If the slices of signatures has any elements, inside if statement will be executed -->
+{{if .Signatures}}
+<div>
+    <ol>
+        {{range .Signatures}}
+        <li>{{.}}</li>
+        {{end}}
+    </ol>
+</div>
+{{end}}
+
+
+</body>
+</html>
