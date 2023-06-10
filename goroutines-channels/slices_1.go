@@ -63,10 +63,18 @@ func main() {
 	// this is not working.
 	// to work it needs to pass the slice as a pass-copy-value, or create and store the slices into the root slices
 	// already as pointer type
+	// Fix by ChatGPT: https://chat.openai.com/share/ea7393b1-f0ae-44cc-8981-7fab6f8bf086
+	// maybe the problem is the 'short variable declaration' that golang reuse the 'group' variable(memory address) and pass it to others goroutines
 	fmt.Printf("===============Slice With Pointer And Channel With Pointer=====================\n")
 	for _, group := range slicesSymbols {
-		go GetGroupsWithPointerAndChannelWithPointer(channelWithPointer, &group)
+		localGroupCopy := group // local copy before passing the memory address to ensure the memory address to be new
+		go GetGroupsWithPointerAndChannelWithPointer(channelWithPointer, &localGroupCopy)
 	}
+	// the below code is another alternative of the memory issue solution for this example
+	//for i := 0; i < len(slicesSymbols); i++ {
+	//	groupCopy := slicesSymbols[i]
+	//	go GetGroupsWithPointerAndChannelWithPointer(channelWithPointer, &groupCopy)
+	//}
 	for i := 0; i < len(slicesSymbols); i++ {
 		fmt.Println("==============================================")
 		for j := 0; j < len(slicesSymbols[i]); j++ {
@@ -86,8 +94,8 @@ func main() {
 	slicesSymbolsWithPointer = append(slicesSymbolsWithPointer, groupTwoWithPointer)
 	slicesSymbolsWithPointer = append(slicesSymbolsWithPointer, groupThreeWithPointer)
 
-	// this work fine.
-	// The slices need to be created as pointer type
+	//this work fine.
+	//The slices need to be created as pointer type
 	fmt.Printf("===============All With Pointer=====================\n")
 	for _, group := range slicesSymbolsWithPointer {
 		go GetGroupsWithPointerAndChannelWithPointer(channelWithPointer2, group)
@@ -130,7 +138,8 @@ func GetGroupsWithoutPointerAndChannel(channel chan string, group []string) {
 func GetGroupsAndChannelWithPointer(channel chan *string, group []string) {
 	fmt.Printf("Called by: %s, slices address: %p, value: %v\n", GetGoroutineId(), group, group)
 	for _, element := range group {
-		channel <- &element
+		elementCopy := element // local copy before passing the memory address to ensure the memory address to be new
+		channel <- &elementCopy
 		time.Sleep(5 * time.Millisecond)
 	}
 }
@@ -138,7 +147,8 @@ func GetGroupsAndChannelWithPointer(channel chan *string, group []string) {
 func GetGroupsWithPointerAndChannelWithPointer(channel chan *string, group *[]string) {
 	fmt.Printf("Called by: %s, slices address: %p, value: %v\n", GetGoroutineId(), *group, group)
 	for _, element := range *group {
-		channel <- &element
+		elementCopy := element // local copy before passing the memory address to ensure the memory address to be new
+		channel <- &elementCopy
 		time.Sleep(5 * time.Millisecond)
 	}
 }
